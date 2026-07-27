@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Cat Clicker — Unit Tests: Initial DOM State</title>
+  <style>
+    body { font-family: monospace; padding: 1rem 2rem; background: #fffbeb; color: #1c1917; }
+    h1 { color: #92400e; }
+    h2 { color: #b45309; margin-top: 1.5rem; }
+    .pass  { color: #166534; }
+    .fail  { color: #991b1b; font-weight: bold; }
+    .suite { margin-left: 1rem; }
+    pre { background: #fef3c7; padding: 0.5rem; border-radius: 4px; overflow-x: auto; }
+    #summary { margin-top: 2rem; font-size: 1.1rem; font-weight: bold; }
+    #iframe-container { display: none; }
+  </style>
+</head>
+<body>
+  <h1>Cat Clicker — Unit Tests: Initial DOM State</h1>
+  <p style="color:#78350f; font-size:0.85rem;">
+    These tests load <code>index.html</code> in a hidden iframe and inspect its DOM before any
+    user interaction. Validates Requirements 1.3, 4.3, 5.1.
+  </p>
+  <div id="output"></div>
+  <div id="summary"></div>
+
+  <!-- Hidden iframe that loads the real index.html -->
+  <div id="iframe-container">
+    <iframe id="app-frame" src="index.html" title="App under test"></iframe>
+  </div>
+
+  <script>
+    // ─── Minimal test harness ─────────────────────────────────────────────────
+    const out = document.getElementById('output');
+    const results = { passed: 0, failed: 0 };
+
+    function suite(name) {
+      const h = document.createElement('h2');
+      h.textContent = name;
+      out.appendChild(h);
+      const d = document.createElement('div');
+      d.className = 'suite';
+      out.appendChild(d);
+      return d;
+    }
+
+    function runTest(container, name, fn) {
+      try {
+        fn();
+        results.passed++;
+        const p = document.createElement('p');
+        p.className = 'pass';
+        p.textContent = '✓ ' + name;
+        container.appendChild(p);
+      } catch (e) {
+        results.failed++;
+        const p = document.createElement('p');
+        p.className = 'fail';
+        p.textContent = '✗ ' + name;
+        container.appendChild(p);
+        const pre = document.createElement('pre');
+        pre.textContent = e.message || String(e);
+        container.appendChild(pre);
+      }
+    }
+
+    function assert(cond, msg) {
+      if (!cond) throw new Error(msg || 'Assertion failed');
+    }
+
+    // ─── Wait for iframe to load, then run tests ──────────────────────────────
+    function main() {
+      const frame = document.getElementById('app-frame');
+
+      frame.addEventListener('load', () => {
+        let doc;
+        try {
+          doc = frame.contentDocument || frame.contentWindow.document;
+        } catch (e) {
+          const p = document.createElement('p');
+          p.className = 'fail';
+          p.textContent =
+            '✗ Could not access iframe document. ' +
+            'If running from file://, open this file via a local server (e.g. python -m http.server) ' +
+            'to avoid cross-origin restrictions. Error: ' + e.message;
+          out.appendChild(p);
+          results.failed++;
+          renderSummary();
+          return;
+        }
+
+        // ── Suite: Unit Tests — Initial DOM State ─────────────────────────
+        // Feature: cat-clicker-app
+        // Validates: Requirements 1.3, 4.3, 5.1
+        const s = suite('Unit Tests — Initial DOM State');
+
+        // ── 1. Cat SVG is present in DOM on load ──────────────────────────
+        // Requirement 1.3: App presents the Cat in an idle resting state before any interaction.
+        runTest(s, 'Cat SVG element is present in DOM on load', () => {
+          const svg = doc.querySelector('#cat svg');
+          assert(svg !== null, '#cat svg element not found in DOM');
+          assert(svg.tagName.toLowerCase() === 'svg', 'Element found is not an <svg>');
+        });
+
+        // ── 2. Cat wrapper exists ─────────────────────────────────────────
+        runTest(s, '#cat wrapper element is present in DOM', () => {
+          const cat = doc.getElementById('cat');
+          assert(cat !== null, '#cat element not found in DOM');
+        });
+
+        // ── 3. Idle animation class is present before any interaction ─────
+        // Requirement 1.3: Cat in idle resting state on page load.
+        runTest(s, '#cat has "cat--idle" class on load (idle animation active)', () => {
+          const cat = doc.getElementById('cat');
+          assert(cat !== null, '#cat element not found');
+          assert(
+            cat.classList.contains('cat--idle'),
+            `Expected "cat--idle" class on #cat but found: "${cat.className}"`
+          );
+        });
+
+        // ── 4. Pet counter initialises to "0" ────────────────────────────
+        // Requirement 4.3: App SHALL initialise the Pet_Counter to 0.
+        runTest(s, '#pet-counter text content is "0" on load', () => {
+          const counter = doc.getElementById('pet-counter');
+          assert(counter !== null, '#pet-counter element not found in DOM');
+          const text = counter.textContent.trim();
+          assert(text === '0', `Expected "0" but got "${text}"`);
+        });
+
+        // ── 5. Happiness fill width is "0%" on load ───────────────────────
+        // Requirement 5.1: Happiness_Meter displayed at all times during a Session.
+        //                  Happiness starts at 0, so fill must be 0%.
+        runTest(s, '#happiness-fill inline style width is "0%" on load', () => {
+          const fill = doc.getElementById('happiness-fill');
+          assert(fill !== null, '#happiness-fill element not found in DOM');
+          const width = fill.style.width;
+          assert(
+            width === '0%' || width === '0',
+            `Expected width "0%" but got "${width}"`
+          );
+        });
+
+        // ── 6. Happiness bar is visible in DOM ───────────────────────────
+        // Requirement 5.1: Happiness_Meter SHALL be a visible progress bar at all times.
+        runTest(s, '#happiness-bar (Happiness_Meter) is present in DOM', () => {
+          const bar = doc.getElementById('happiness-bar');
+          assert(bar !== null, '#happiness-bar element not found in DOM');
+        });
+
+        // ── 7. Happiness bar has correct ARIA role ────────────────────────
+        runTest(s, '#happiness-bar has role="progressbar"', () => {
+          const bar = doc.getElementById('happiness-bar');
+          assert(bar !== null, '#happiness-bar element not found');
+          assert(
+            bar.getAttribute('role') === 'progressbar',
+            `Expected role="progressbar" but got "${bar.getAttribute('role')}"`
+          );
+        });
+
+        // ── 8. Happiness bar aria-valuenow is "0" on load ─────────────────
+        runTest(s, '#happiness-bar aria-valuenow is "0" on load', () => {
+          const bar = doc.getElementById('happiness-bar');
+          assert(bar !== null, '#happiness-bar element not found');
+          const valuenow = bar.getAttribute('aria-valuenow');
+          assert(
+            valuenow === '0',
+            `Expected aria-valuenow "0" but got "${valuenow}"`
+          );
+        });
+
+        // ── 9. Cat does NOT have sad class on load (happiness starts at 0,
+        //       but cat--sad is a visual override that JS applies when the
+        //       applyState function runs — on initial load, before the decay
+        //       loop fires, the class may or may not be present depending on
+        //       whether applyState() is called at startup.  We instead verify
+        //       that cat--idle is the dominant class, which covers Req 1.3.) ─
+        // (Already covered in test 3; included here for completeness.)
+        runTest(s, '#cat does not have any reaction animation class on load', () => {
+          const cat = doc.getElementById('cat');
+          assert(cat !== null, '#cat element not found');
+          const reactionClasses = [
+            'cat--purr', 'cat--boop', 'cat--happy', 'cat--slow-blink',
+            'cat--knead', 'cat--roll', 'cat--zoomies',
+          ];
+          const present = reactionClasses.filter(c => cat.classList.contains(c));
+          assert(
+            present.length === 0,
+            `Expected no reaction classes on load but found: ${present.join(', ')}`
+          );
+        });
+
+        // ── 10. Speech bubble is hidden on load ───────────────────────────
+        runTest(s, '#speech-bubble is not visibly shown on load (no visible class)', () => {
+          const bubble = doc.getElementById('speech-bubble');
+          assert(bubble !== null, '#speech-bubble element not found in DOM');
+          assert(
+            !bubble.classList.contains('speech-bubble--visible'),
+            'Expected speech bubble to NOT have "speech-bubble--visible" on load'
+          );
+        });
+
+        // ── Suite: Speech Bubble Lifecycle ────────────────────────────────
+        // Feature: cat-clicker-app
+        // Validates: Requirements 3.4, 3.6, 5.4, 5.5
+        runSpeechBubbleSuite(frame, doc);
+      });
+
+      // Guard: if iframe fails to load within 8s, surface an error
+      setTimeout(() => {
+        if (results.passed + results.failed === 0) {
+          const p = document.createElement('p');
+          p.className = 'fail';
+          p.textContent =
+            '✗ Timeout: index.html did not load within 8 seconds. ' +
+            'Ensure you are serving files via a local server, not the file:// protocol.';
+          out.appendChild(p);
+          results.failed++;
+          renderSummary();
+        }
+      }, 8000);
+    }
+
+    // ─── Speech Bubble Lifecycle Suite ───────────────────────────────────────
+    // Feature: cat-clicker-app
+    // Validates: Requirements 3.4, 3.6, 5.4, 5.5
+    //
+    // This suite runs a mix of:
+    //   • Static tests  — inspectable immediately after load (no interaction needed)
+    //   • Async tests   — require simulating a click and waiting for JS to execute;
+    //                     these use setTimeout and call renderSummary() when done.
+    function runSpeechBubbleSuite(frame, doc) {
+      const s2 = suite('Unit Tests — Speech Bubble Lifecycle (Requirements 3.4, 3.6, 5.4, 5.5)');
+
+      // ── 1. Speech bubble is not visible on load (explicit assertion) ───────
+      // Requirement 3.4: Speech_Bubble is only shown after a Pet, not on load.
+      runTest(s2, '[static] #speech-bubble does not have "speech-bubble--visible" on load', () => {
+        const bubble = doc.getElementById('speech-bubble');
+        assert(bubble !== null, '#speech-bubble element not found');
+        assert(
+          !bubble.classList.contains('speech-bubble--visible'),
+          'Expected no "speech-bubble--visible" class on initial load'
+        );
+      });
+
+      // ── 2. Speech bubble has zero opacity by default (CSS-driven hide) ─────
+      // Requirement 3.6: fade-in ≤ 200ms / fade-out ≤ 300ms via CSS transitions.
+      // The element uses opacity:0 when the visible class is absent.
+      runTest(s2, '[static] #speech-bubble CSS opacity is 0 on load (hidden via inline style)', () => {
+        const bubble = doc.getElementById('speech-bubble');
+        assert(bubble !== null, '#speech-bubble element not found');
+        // The CSS rule sets opacity:0 when speech-bubble--visible is absent.
+        // We verify the element exists and lacks the class (opacity enforced by stylesheet).
+        const computedOpacity = frame.contentWindow.getComputedStyle(bubble).opacity;
+        assert(
+          parseFloat(computedOpacity) === 0,
+          `Expected computed opacity 0 on load but got "${computedOpacity}"`
+        );
+      });
+
+      // ── 3. cat--sad NOT present on load (applyState not yet called) ────────
+      // Requirement 5.5: cat--sad is applied by applyState() when happiness===0.
+      // applyState() is only invoked after a pet (inside playReaction / handlePet),
+      // so on initial page load the class has not been toggled yet.
+      // NOTE: The cat starts with happiness=0 but applyState() has not run;
+      //       cat--sad will appear only after the first pet event completes.
+      runTest(s2, '[static] #cat does NOT have "cat--sad" on load (applyState not yet called)', () => {
+        const cat = doc.getElementById('cat');
+        assert(cat !== null, '#cat element not found');
+        assert(
+          !cat.classList.contains('cat--sad'),
+          `Expected "cat--sad" to be absent on load (applyState has not run) but found it present`
+        );
+      });
+
+      // ── 4. cat--max NOT present on load ───────────────────────────────────
+      // Requirement 5.4: cat--max is applied only when happiness reaches 100.
+      // Happiness starts at 0, so this class must never be present on load.
+      runTest(s2, '[static] #cat does NOT have "cat--max" on load (happiness starts at 0)', () => {
+        const cat = doc.getElementById('cat');
+        assert(cat !== null, '#cat element not found');
+        assert(
+          !cat.classList.contains('cat--max'),
+          `Expected "cat--max" to be absent on load but found it present`
+        );
+      });
+
+      // ── 5. meter--max NOT present on load ─────────────────────────────────
+      runTest(s2, '[static] #happiness-bar does NOT have "meter--max" on load', () => {
+        const bar = doc.getElementById('happiness-bar');
+        assert(bar !== null, '#happiness-bar element not found');
+        assert(
+          !bar.classList.contains('meter--max'),
+          `Expected "meter--max" to be absent on load but found it present`
+        );
+      });
+
+      // ── 6. Speech bubble text is empty on load ────────────────────────────
+      runTest(s2, '[static] #speech-bubble text content is empty on load', () => {
+        const bubble = doc.getElementById('speech-bubble');
+        assert(bubble !== null, '#speech-bubble element not found');
+        assert(
+          bubble.textContent.trim() === '',
+          `Expected empty text content on load but got "${bubble.textContent.trim()}"`
+        );
+      });
+
+      // ── 7. applyState() toggles cat--sad when happiness===0 ───────────────
+      // Requirement 5.5: test by calling applyState() directly via iframe window.
+      // This verifies the class-toggle logic without waiting for a full pet cycle.
+      runTest(s2, '[direct-call] applyState() adds "cat--sad" when happiness is 0', () => {
+        const win = frame.contentWindow;
+        assert(typeof win.applyState === 'function', 'applyState() is not exposed on window — ensure it is not inside a block scope');
+        // Ensure state is at happiness 0
+        win.state.happiness = 0;
+        win.applyState();
+        const cat = doc.getElementById('cat');
+        assert(
+          cat.classList.contains('cat--sad'),
+          `Expected "cat--sad" after applyState() with happiness=0 but classes are: "${cat.className}"`
+        );
+      });
+
+      // ── 8. applyState() removes cat--sad when happiness > 0 ───────────────
+      // Requirement 5.5: on next pet happiness rises, sad state is removed.
+      runTest(s2, '[direct-call] applyState() removes "cat--sad" when happiness > 0', () => {
+        const win = frame.contentWindow;
+        assert(typeof win.applyState === 'function', 'applyState() is not exposed on window');
+        win.state.happiness = 10;
+        win.applyState();
+        const cat = doc.getElementById('cat');
+        assert(
+          !cat.classList.contains('cat--sad'),
+          `Expected "cat--sad" to be removed after applyState() with happiness=10 but classes are: "${cat.className}"`
+        );
+        // Restore state to 0 to avoid polluting subsequent tests
+        win.state.happiness = 0;
+        win.applyState();
+      });
+
+      // ── 9. applyState() adds cat--max when happiness===100 ────────────────
+      // Requirement 5.4: special max-happiness visual state on Cat.
+      runTest(s2, '[direct-call] applyState() adds "cat--max" when happiness is 100', () => {
+        const win = frame.contentWindow;
+        assert(typeof win.applyState === 'function', 'applyState() is not exposed on window');
+        win.state.happiness = 100;
+        win.applyState();
+        const cat = doc.getElementById('cat');
+        assert(
+          cat.classList.contains('cat--max'),
+          `Expected "cat--max" after applyState() with happiness=100 but classes are: "${cat.className}"`
+        );
+        // Restore
+        win.state.happiness = 0;
+        win.applyState();
+      });
+
+      // ── 10. applyState() adds meter--max when happiness===100 ─────────────
+      runTest(s2, '[direct-call] applyState() adds "meter--max" to #happiness-bar when happiness is 100', () => {
+        const win = frame.contentWindow;
+        assert(typeof win.applyState === 'function', 'applyState() is not exposed on window');
+        win.state.happiness = 100;
+        win.applyState();
+        const bar = doc.getElementById('happiness-bar');
+        assert(
+          bar.classList.contains('meter--max'),
+          `Expected "meter--max" on #happiness-bar after applyState() with happiness=100 but classes are: "${bar.className}"`
+        );
+        // Restore
+        win.state.happiness = 0;
+        win.applyState();
+      });
+
+      // ── 11. Speech bubble becomes visible after playReaction() ─────────────
+      // Requirement 3.4: Speech_Bubble shown adjacent to Cat during a Reaction.
+      // We call playReaction() directly with a known reaction object to test
+      // the bubble lifecycle without needing a real click event.
+      runTest(s2, '[direct-call] playReaction() adds "speech-bubble--visible" to #speech-bubble', () => {
+        const win = frame.contentWindow;
+        assert(typeof win.playReaction === 'function', 'playReaction() is not exposed on window');
+        // Use the shortest-duration reaction to minimise test side-effects
+        const fakeReaction = { id: 'test', emoji: '🐱', animClass: 'cat--boop', animDuration: 400, bubbleDuration: 1500 };
+        win.playReaction(fakeReaction);
+        const bubble = doc.getElementById('speech-bubble');
+        assert(
+          bubble.classList.contains('speech-bubble--visible'),
+          `Expected "speech-bubble--visible" immediately after playReaction() but classes are: "${bubble.className}"`
+        );
+        assert(
+          bubble.textContent === '🐱',
+          `Expected bubble text "🐱" but got "${bubble.textContent}"`
+        );
+        // Note: bubble will auto-hide after bubbleDuration ms via internal setTimeout — no cleanup needed here.
+      });
+
+      // ── 12. Speech bubble has pointer-events:none (accessibility / UX) ────
+      // Requirement 3.6: bubble must not intercept mouse/touch events on the cat.
+      runTest(s2, '[static] #speech-bubble has pointer-events: none (does not block cat interaction)', () => {
+        const bubble = doc.getElementById('speech-bubble');
+        assert(bubble !== null, '#speech-bubble element not found');
+        const pe = frame.contentWindow.getComputedStyle(bubble).pointerEvents;
+        assert(
+          pe === 'none',
+          `Expected pointer-events:none on #speech-bubble but got "${pe}"`
+        );
+      });
+
+      // ─── Async test: speech bubble hides itself after bubbleDuration ──────
+      // Requirement 3.4: bubble shown for 1500–2500 ms then hidden.
+      // This test runs asynchronously; renderSummary is deferred until it completes.
+      const asyncNote = document.createElement('p');
+      asyncNote.style.color = '#92400e';
+      asyncNote.style.fontStyle = 'italic';
+      asyncNote.textContent = '⏳ Async test running: waiting for speech bubble to auto-hide after playReaction()…';
+      s2.appendChild(asyncNote);
+
+      setTimeout(function () {
+        s2.removeChild(asyncNote);
+        // After the shortest bubbleDuration (1500ms) the bubble should be hidden.
+        // playReaction() was called in test 11 with bubbleDuration=1500; add 400ms buffer.
+        runTest(s2, '[async] #speech-bubble hides itself automatically after bubbleDuration (1500 ms + 400 ms buffer)', () => {
+          const bubble = doc.getElementById('speech-bubble');
+          assert(bubble !== null, '#speech-bubble element not found');
+          assert(
+            !bubble.classList.contains('speech-bubble--visible'),
+            `Expected "speech-bubble--visible" to be removed after bubble duration elapsed, but it is still present. Classes: "${bubble.className}"`
+          );
+        });
+        // Chain into event-handling suite; it will call renderSummary() when done.
+        runEventHandlingSuite(frame, doc);
+      }, 1900); // 1500ms bubbleDuration + 400ms CSS fade-out buffer
+    }
+
+    // ─── Event Handling Suite ────────────────────────────────────────────────
+    // Feature: cat-clicker-app
+    // Validates: Requirements 2.1, 2.3, 2.4, 2.5
+    //
+    // All four tests interact with the iframe's cat element via synthetic events.
+    // A 20 ms settle timeout is used after each dispatch to allow JS to execute.
+    function runEventHandlingSuite(frame, doc) {
+      const win = frame.contentWindow;
+      const s3 = suite('Unit Tests — Event Handling (Requirements 2.1, 2.3, 2.4, 2.5)');
+
+      // Helper: reset state to a clean, non-animating baseline.
+      // We also restore happiness and pendingPets so tests don't bleed into each other.
+      function resetState() {
+        win.state.isAnimating = false;
+        win.state.pendingPets = 0;
+        win.state.happiness   = 0;
+        win.state.lastPetTime = 0;
+        // Snapshot petCount before each interaction test so we can assert delta.
+      }
+
+      // ── Test 1: mouse click on cat registers a pet (counter increments) ────
+      // Requirement 2.1: WHEN a user clicks within Cat bounding area → one Pet.
+      // Requirement 2.4: supports mouse click events.
+      //
+      // Strategy: snapshot petCount, dispatch a synthetic MouseEvent('click') on
+      // #cat, wait 20ms for handlePet() to run, assert petCount === snapshot + 1.
+      const catEl = doc.getElementById('cat');
+
+      resetState();
+      const countBeforeClick = win.state.petCount;
+      catEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+      setTimeout(function () {
+        runTest(s3, '[click] mouse click on #cat increments petCount by 1 (Req 2.1, 2.4)', () => {
+          const after = win.state.petCount;
+          assert(
+            after === countBeforeClick + 1,
+            `Expected petCount ${countBeforeClick + 1} after click but got ${after}`
+          );
+        });
+
+        // ── Test 2: touch tap (touchend) on cat registers a pet ──────────────
+        // Requirement 2.1, 2.4: supports touch tap events.
+        //
+        // TouchEvent construction may throw on browsers that don't support it;
+        // we guard with try/catch and skip gracefully.
+        resetState();
+        const countBeforeTouch = win.state.petCount;
+        let touchDispatched = true;
+        try {
+          // Build a minimal TouchEvent. The Touch constructor and TouchEvent
+          // constructor are standard in all modern browsers.
+          const touch = new win.Touch({
+            identifier: 1,
+            target: catEl,
+            clientX: 0,
+            clientY: 0,
+          });
+          const touchEndEvt = new win.TouchEvent('touchend', {
+            bubbles: true,
+            cancelable: true,
+            changedTouches: [touch],
+          });
+          catEl.dispatchEvent(touchEndEvt);
+        } catch (e) {
+          touchDispatched = false;
+        }
+
+        setTimeout(function () {
+          if (!touchDispatched) {
+            // Surface a skip notice rather than a false failure.
+            const p = document.createElement('p');
+            p.style.color = '#92400e';
+            p.style.fontStyle = 'italic';
+            p.textContent = '⚠ [touch] TouchEvent constructor not supported in this browser — test skipped.';
+            s3.appendChild(p);
+          } else {
+            runTest(s3, '[touch] touchend on #cat increments petCount by 1 (Req 2.1, 2.4)', () => {
+              const after = win.state.petCount;
+              assert(
+                after === countBeforeTouch + 1,
+                `Expected petCount ${countBeforeTouch + 1} after touchend but got ${after}`
+              );
+            });
+          }
+
+          // ── Test 3: preventDefault is called on touch events ───────────────
+          // Requirement 2.5: App SHALL prevent default browser touch behaviour.
+          //
+          // We dispatch a cancelable TouchEvent on #cat and check that the
+          // event's defaultPrevented property is true after dispatch — this
+          // confirms handlePet() called event.preventDefault() on it.
+          // Additionally the counter must have incremented (handler ran fully).
+          resetState();
+          const countBeforePD = win.state.petCount;
+          let pdChecked = false;
+          let defaultPrevented = false;
+          try {
+            const touch2 = new win.Touch({
+              identifier: 2,
+              target: catEl,
+              clientX: 0,
+              clientY: 0,
+            });
+            const touchPDEvt = new win.TouchEvent('touchend', {
+              bubbles: true,
+              cancelable: true,
+              changedTouches: [touch2],
+            });
+            catEl.dispatchEvent(touchPDEvt);
+            // After dispatchEvent returns synchronously, check defaultPrevented.
+            defaultPrevented = touchPDEvt.defaultPrevented;
+            pdChecked = true;
+          } catch (e) {
+            pdChecked = false;
+          }
+
+          setTimeout(function () {
+            if (!pdChecked) {
+              const p = document.createElement('p');
+              p.style.color = '#92400e';
+              p.style.fontStyle = 'italic';
+              p.textContent = '⚠ [preventDefault] TouchEvent constructor not supported — test skipped.';
+              s3.appendChild(p);
+            } else {
+              runTest(s3, '[preventDefault] touchend event has defaultPrevented === true (Req 2.5)', () => {
+                assert(
+                  defaultPrevented === true,
+                  `Expected event.defaultPrevented to be true after touchend on #cat but got ${defaultPrevented}`
+                );
+              });
+              // Also confirm the counter ran (handler completed, not just called preventDefault).
+              runTest(s3, '[preventDefault] petCount also incremented confirming handler ran (Req 2.1)', () => {
+                const after = win.state.petCount;
+                assert(
+                  after === countBeforePD + 1,
+                  `Expected petCount ${countBeforePD + 1} (handler ran after preventDefault) but got ${after}`
+                );
+              });
+            }
+
+            // ── Test 4: pets during animation are queued (not dropped) ─────
+            // Requirement 2.3: WHILE a Reaction Animation is playing, App SHALL
+            // accept and queue subsequent Pets without dropping input.
+            //
+            // Strategy: set state.isAnimating = true (simulate mid-animation),
+            // snapshot pendingPets, dispatch a click, wait 20ms, assert
+            // pendingPets === snapshot + 1 and petCount did NOT change (pet
+            // was queued, not processed immediately).
+            resetState();
+            win.state.isAnimating = true;  // pretend an animation is running
+            const pendingBefore   = win.state.pendingPets;   // should be 0
+            const countBeforeQ    = win.state.petCount;
+            catEl.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+            setTimeout(function () {
+              runTest(s3, '[queue] click during animation increments pendingPets (Req 2.3)', () => {
+                const after = win.state.pendingPets;
+                assert(
+                  after === pendingBefore + 1,
+                  `Expected pendingPets ${pendingBefore + 1} after click while animating but got ${after}`
+                );
+              });
+              runTest(s3, '[queue] petCount does NOT increment while animation is in flight (Req 2.3)', () => {
+                const after = win.state.petCount;
+                assert(
+                  after === countBeforeQ,
+                  `Expected petCount to stay at ${countBeforeQ} while animating but got ${after}`
+                );
+              });
+
+              // Restore state so nothing leaks into later browser interactions.
+              win.state.isAnimating = false;
+              win.state.pendingPets = 0;
+
+              renderSummary();
+            }, 20);
+
+          }, 20);
+        }, 20);
+      }, 20);
+    }
+
+    function renderSummary() {
+      const summaryEl = document.getElementById('summary');
+      summaryEl.className = results.failed === 0 ? 'pass' : 'fail';
+      summaryEl.textContent =
+        `Result: ${results.passed} passed, ${results.failed} failed ` +
+        `(${results.passed + results.failed} total)`;
+    }
+
+    main();
+  </script>
+</body>
+</html>

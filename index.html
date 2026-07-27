@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cat Clicker</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ─── Idle Animation ─────────────────────────────────────────── */
+    @keyframes idle-breathe {
+      0%, 100% { transform: scaleY(1) translateY(0); }
+      50%       { transform: scaleY(1.04) translateY(-2px); }
+    }
+
+    @keyframes idle-tail-sway {
+      0%, 100% { transform: rotate(-8deg); }
+      50%       { transform: rotate(8deg); }
+    }
+
+    /* cat wrapper drives the breathing */
+    .cat--idle {
+      animation: idle-breathe 3s ease-in-out infinite;
+      transform-origin: center bottom;
+    }
+
+    /* tail element inside the SVG */
+    .cat-tail {
+      transform-origin: 20px 0px;
+      animation: idle-tail-sway 2s ease-in-out infinite;
+    }
+
+    /* ─── State Classes ──────────────────────────────────────────── */
+    /* sad state — applied when happiness === 0 */
+    .cat--sad .cat-eye {
+      rx: 3;
+      ry: 1.5;
+    }
+    .cat--sad .cat-ear-left {
+      transform: rotate(15deg);
+      transform-origin: 78px 58px;
+    }
+    .cat--sad .cat-ear-right {
+      transform: rotate(-15deg);
+      transform-origin: 122px 58px;
+    }
+
+    /* max happiness state */
+    @keyframes sparkle-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.3); }
+    }
+    .cat--max .cat-sparkle {
+      display: block;
+      animation: sparkle-pulse 0.5s ease-in-out infinite;
+    }
+
+    /* ─── Reaction Animations ────────────────────────────────────── */
+    @keyframes purr-shake {
+      0%, 100% { transform: translateX(0) scaleY(1); }
+      25%       { transform: translateX(-3px) scaleY(1.02); }
+      75%       { transform: translateX(3px) scaleY(1.02); }
+    }
+    @keyframes boop-bounce {
+      0%, 100% { transform: translateY(0); }
+      40%       { transform: translateY(-12px); }
+      70%       { transform: translateY(-6px); }
+    }
+    @keyframes happy-wiggle {
+      0%, 100% { transform: rotate(0deg); }
+      20%       { transform: rotate(-6deg); }
+      40%       { transform: rotate(6deg); }
+      60%       { transform: rotate(-4deg); }
+      80%       { transform: rotate(4deg); }
+    }
+    @keyframes slow-blink-anim {
+      0%, 100% { transform: scaleY(1); }
+      40%, 60% { transform: scaleY(0.1); }
+    }
+    @keyframes knead-press {
+      0%, 100% { transform: translateY(0) scaleX(1); }
+      30%       { transform: translateY(4px) scaleX(1.04); }
+      60%       { transform: translateY(4px) scaleX(0.97); }
+    }
+    @keyframes roll-spin {
+      0%   { transform: rotate(0deg) translateX(0); }
+      25%  { transform: rotate(90deg) translateX(4px); }
+      50%  { transform: rotate(180deg) translateX(0); }
+      75%  { transform: rotate(270deg) translateX(-4px); }
+      100% { transform: rotate(360deg) translateX(0); }
+    }
+    @keyframes zoomies-dash {
+      0%, 100% { transform: translateX(0) scaleX(1); }
+      20%       { transform: translateX(-10px) scaleX(0.9); }
+      50%       { transform: translateX(12px) scaleX(1.1); }
+      80%       { transform: translateX(-6px) scaleX(0.95); }
+    }
+
+    .cat--purr      { animation: purr-shake 0.15s ease-in-out infinite; }
+    .cat--boop      { animation: boop-bounce 0.4s ease-out forwards; }
+    .cat--happy     { animation: happy-wiggle 0.8s ease-in-out forwards; }
+    .cat--slow-blink{ animation: slow-blink-anim 1.2s ease-in-out forwards; }
+    .cat--knead     { animation: knead-press 0.25s ease-in-out infinite; }
+    .cat--roll      { animation: roll-spin 0.9s linear forwards; }
+    .cat--zoomies   { animation: zoomies-dash 0.5s ease-in-out forwards; }
+
+    /* ─── Speech Bubble ──────────────────────────────────────────── */
+    #speech-bubble {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 200ms ease-in;
+    }
+    #speech-bubble.speech-bubble--visible {
+      opacity: 1;
+    }
+    #speech-bubble.speech-bubble--hiding {
+      transition: opacity 300ms ease-out;
+      opacity: 0;
+    }
+
+    /* ─── Happiness Meter ────────────────────────────────────────── */
+    #happiness-fill {
+      transition: width 300ms ease-in-out;
+    }
+    .meter--max #happiness-fill {
+      background: linear-gradient(90deg, #f59e0b, #ef4444, #ec4899);
+    }
+
+    /* ─── Cat sparkles hidden by default ────────────────────────── */
+    .cat-sparkle { display: none; }
+
+    /* ─── Smooth state transitions on the cat wrapper ───────────── */
+    #cat {
+      transition: filter 300ms ease, transform 300ms ease;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #cat:hover { filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.6)); }
+    #cat:active { transform: scale(0.96); }
+  </style>
+</head>
+<body class="min-h-screen bg-amber-50 flex flex-col items-center justify-center overflow-x-hidden">
+
+  <!-- ── Speech Bubble ──────────────────────────────────────── -->
+  <div class="relative w-full flex justify-center">
+    <div
+      id="speech-bubble"
+      role="status"
+      aria-live="polite"
+      class="absolute -top-2 bg-white border-2 border-amber-400 rounded-2xl px-4 py-2 text-lg font-semibold text-amber-800 shadow-md z-10 max-w-[calc(100vw-2rem)] overflow-hidden text-ellipsis whitespace-nowrap"
+    >
+      <!-- reaction text injected by JS -->
+    </div>
+
+    <!-- ── Cat SVG ─────────────────────────────────────────── -->
+    <!--
+      Coordinate space: 200 × 220 viewBox.
+      Body  : ellipse centred at (100,145)
+      Head  : ellipse centred at (100,90)
+      Ears  : two polygons
+      Eyes  : two circles
+      Nose  : small ellipse
+      Mouth : two short lines
+      Tail  : curved path
+    -->
+    <div
+      id="cat"
+      class="cat--idle"
+      role="img"
+      aria-label="A cute minimalist cat. Click or tap to pet it."
+      tabindex="0"
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 200 220"
+        class="w-40 h-44 sm:w-52 sm:h-56 md:w-64 md:h-72 lg:w-72 lg:h-80"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <!-- Tail (drawn first so it sits behind the body) -->
+        <path
+          class="cat-tail"
+          d="M 80,185 Q 30,200 40,160 Q 50,130 65,150"
+          fill="none"
+          stroke="#92400e"
+          stroke-width="8"
+          stroke-linecap="round"
+        />
+
+        <!-- Body -->
+        <ellipse
+          class="cat-body"
+          cx="100" cy="155" rx="52" ry="42"
+          fill="#fde68a"
+          stroke="#92400e"
+          stroke-width="3"
+        />
+
+        <!-- Belly patch -->
+        <ellipse
+          cx="100" cy="162" rx="28" ry="24"
+          fill="#fef3c7"
+          stroke="none"
+        />
+
+        <!-- Head -->
+        <ellipse
+          class="cat-head"
+          cx="100" cy="88" rx="44" ry="40"
+          fill="#fde68a"
+          stroke="#92400e"
+          stroke-width="3"
+        />
+
+        <!-- Left ear (polygon = triangle) -->
+        <polygon
+          class="cat-ear-left"
+          points="68,62 58,28 90,56"
+          fill="#fde68a"
+          stroke="#92400e"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+        <!-- Left ear inner -->
+        <polygon
+          points="70,57 63,38 84,55"
+          fill="#fca5a5"
+          stroke="none"
+        />
+
+        <!-- Right ear (polygon = triangle) -->
+        <polygon
+          class="cat-ear-right"
+          points="132,62 142,28 110,56"
+          fill="#fde68a"
+          stroke="#92400e"
+          stroke-width="3"
+          stroke-linejoin="round"
+        />
+        <!-- Right ear inner -->
+        <polygon
+          points="130,57 137,38 116,55"
+          fill="#fca5a5"
+          stroke="none"
+        />
+
+        <!-- Left eye -->
+        <ellipse
+          class="cat-eye cat-eye-left"
+          cx="85" cy="88" rx="7" ry="8"
+          fill="#1c1917"
+        />
+        <!-- Left eye shine -->
+        <circle cx="88" cy="85" r="2.5" fill="white" />
+
+        <!-- Right eye -->
+        <ellipse
+          class="cat-eye cat-eye-right"
+          cx="115" cy="88" rx="7" ry="8"
+          fill="#1c1917"
+        />
+        <!-- Right eye shine -->
+        <circle cx="118" cy="85" r="2.5" fill="white" />
+
+        <!-- Nose -->
+        <ellipse
+          cx="100" cy="103" rx="4" ry="3"
+          fill="#f9a8d4"
+          stroke="#92400e"
+          stroke-width="1"
+        />
+
+        <!-- Mouth -->
+        <path
+          d="M 100,106 Q 93,112 88,110"
+          fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round"
+        />
+        <path
+          d="M 100,106 Q 107,112 112,110"
+          fill="none" stroke="#92400e" stroke-width="2" stroke-linecap="round"
+        />
+
+        <!-- Whiskers left -->
+        <line x1="55" y1="102" x2="82" y2="105" stroke="#92400e" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+        <line x1="52" y1="108" x2="80" y2="108" stroke="#92400e" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+
+        <!-- Whiskers right -->
+        <line x1="145" y1="102" x2="118" y2="105" stroke="#92400e" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+        <line x1="148" y1="108" x2="120" y2="108" stroke="#92400e" stroke-width="1.5" stroke-linecap="round" opacity="0.7" />
+
+        <!-- Sparkles (hidden; shown on cat--max) -->
+        <g class="cat-sparkle">
+          <text x="148" y="55" font-size="18" text-anchor="middle">✨</text>
+          <text x="46"  y="55" font-size="14" text-anchor="middle">✨</text>
+          <text x="100" y="22" font-size="12" text-anchor="middle">✨</text>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── HUD ────────────────────────────────────────────────── -->
+  <div class="mt-6 w-full max-w-xs sm:max-w-sm px-4 flex flex-col items-center gap-3">
+
+    <!-- Pet Counter -->
+    <div class="text-center">
+      <p class="text-sm font-medium text-amber-700 uppercase tracking-wide">Pets</p>
+      <p
+        id="pet-counter"
+        class="text-4xl font-bold text-amber-900 tabular-nums"
+        aria-live="polite"
+        aria-label="Pet count"
+      >0</p>
+    </div>
+
+    <!-- Happiness Meter -->
+    <div class="w-full">
+      <p class="text-sm font-medium text-amber-700 uppercase tracking-wide mb-1 text-center">Happiness</p>
+      <div
+        id="happiness-bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow="0"
+        aria-label="Happiness meter"
+        class="w-full h-5 bg-amber-200 rounded-full overflow-hidden border-2 border-amber-400"
+      >
+        <div
+          id="happiness-fill"
+          class="h-full bg-gradient-to-r from-amber-400 to-orange-400 rounded-full"
+          style="width: 0%;"
+        ></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Hint text ──────────────────────────────────────────── -->
+  <p class="mt-4 text-xs text-amber-500 italic select-none">Click or tap the cat to pet it!</p>
+
+  <script>
+    // ─── App State ───────────────────────────────────────────────
+    const state = {
+      petCount: 0,           // integer >= 0
+      happiness: 0,          // integer in [0, 100]
+      lastPetTime: 0,        // timestamp (ms) of most recent pet
+      lastReactionIndex: -1, // index of last reaction to prevent repeat
+      isAnimating: false,    // whether a reaction animation is in flight
+      pendingPets: 0,        // queued pets during animation
+    };
+
+    // ─── decayTick ───────────────────────────────────────────────
+    // Req 5.3: decrease happiness by 1 when idle > 3s and happiness > 0
+    function decayTick() {
+      const now = Date.now();
+      if (state.happiness > 0 && now - state.lastPetTime > 3000) {
+        state.happiness = Math.max(state.happiness - 1, 0);
+      }
+    }
+
+    // ─── Reaction Pool ───────────────────────────────────────────
+    const REACTIONS = [
+      { id: 'purr',       sound: 'purr',       emoji: 'Purrr… 😻',          animClass: 'cat--purr',       animDuration: 600,  bubbleDuration: 2000 },
+      { id: 'boop',       sound: 'boop',       emoji: 'Boop! 👆',            animClass: 'cat--boop',       animDuration: 400,  bubbleDuration: 1500 },
+      { id: 'happy',      sound: 'happy',      emoji: 'So happy! 😸',        animClass: 'cat--happy',      animDuration: 800,  bubbleDuration: 2000 },
+      { id: 'slow-blink', sound: 'slow-blink', emoji: 'I trust you 💕',      animClass: 'cat--slow-blink', animDuration: 1200, bubbleDuration: 2500 },
+      { id: 'knead',      sound: 'knead',      emoji: 'Making biscuits 🍞',  animClass: 'cat--knead',      animDuration: 1000, bubbleDuration: 2500 },
+      { id: 'roll',       sound: 'roll',       emoji: 'Belly rubs! 🙈',      animClass: 'cat--roll',       animDuration: 900,  bubbleDuration: 2000 },
+      { id: 'zoomies',    sound: 'zoomies',    emoji: 'ZOOMIES!! 🌀',        animClass: 'cat--zoomies',    animDuration: 500,  bubbleDuration: 1500 },
+    ];
+
+    // ─── Happiness ───────────────────────────────────────────────
+    // Req 5.2: Increase happiness by 10 on each pet, capped at 100.
+    function increaseHappiness() {
+      state.happiness = Math.min(state.happiness + 10, 100);
+      state.lastPetTime = Date.now();
+    }
+
+    // ─── Audio Context ───────────────────────────────────────────
+    let audioCtx = null;
+    function getAudioCtx() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      return audioCtx;
+    }
+
+    // ─── playSound ───────────────────────────────────────────────
+    // Synthesizes a unique cat-themed sound for each reaction id.
+    // Each call creates fresh nodes — oscillators are never reused.
+    function playSound(reactionId) {
+      const ctx = getAudioCtx();
+      // Resume handles the suspended state imposed by autoplay policy
+      ctx.resume().then(function () {
+        const now = ctx.currentTime;
+
+        if (reactionId === 'purr') {
+          // Low-frequency sawtooth rumble with LFO tremolo, ~600ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(80, now);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.18, now + 0.08);
+          gain.gain.setValueAtTime(0.18, now + 0.5);
+          gain.gain.linearRampToValueAtTime(0, now + 0.6);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.6);
+
+          // LFO for tremolo: modulates main oscillator frequency ±5Hz at 15Hz
+          const lfo = ctx.createOscillator();
+          const lfoGain = ctx.createGain();
+          lfo.type = 'sine';
+          lfo.frequency.setValueAtTime(15, now);
+          lfoGain.gain.setValueAtTime(5, now);
+          lfo.connect(lfoGain);
+          lfoGain.connect(osc.frequency);
+          lfo.start(now);
+          lfo.stop(now + 0.6);
+
+        } else if (reactionId === 'boop') {
+          // Short high sine blip with freq sweep 800→1200Hz over 80ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(800, now);
+          osc.frequency.linearRampToValueAtTime(1200, now + 0.08);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.3, now + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.12);
+
+        } else if (reactionId === 'happy') {
+          // Ascending chirp: sine sweep 400→900Hz over 200ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(400, now);
+          osc.frequency.linearRampToValueAtTime(900, now + 0.2);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.28, now + 0.02);
+          gain.gain.setValueAtTime(0.28, now + 0.16);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.25);
+
+        } else if (reactionId === 'slow-blink') {
+          // Soft low hum: sine ~220Hz, gentle slow fade in/out over 400ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(220, now);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.1, now + 0.15);
+          gain.gain.setValueAtTime(0.1, now + 0.25);
+          gain.gain.linearRampToValueAtTime(0, now + 0.4);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.42);
+
+        } else if (reactionId === 'knead') {
+          // Two quick sine pulses at 350Hz and 280Hz, 60ms each, 80ms gap
+          // Pulse 1: 350Hz starting at now
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
+          osc1.type = 'sine';
+          osc1.frequency.setValueAtTime(350, now);
+          gain1.gain.setValueAtTime(0, now);
+          gain1.gain.linearRampToValueAtTime(0.25, now + 0.01);
+          gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+          osc1.connect(gain1);
+          gain1.connect(ctx.destination);
+          osc1.start(now);
+          osc1.stop(now + 0.07);
+
+          // Pulse 2: 280Hz starting at now + 0.06 + 0.08 gap = now + 0.14
+          const t2 = now + 0.14;
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(280, t2);
+          gain2.gain.setValueAtTime(0, t2);
+          gain2.gain.linearRampToValueAtTime(0.25, t2 + 0.01);
+          gain2.gain.exponentialRampToValueAtTime(0.001, t2 + 0.06);
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.start(t2);
+          osc2.stop(t2 + 0.07);
+
+        } else if (reactionId === 'roll') {
+          // Descending slide: sawtooth sweep 600→200Hz over 350ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(600, now);
+          osc.frequency.linearRampToValueAtTime(200, now + 0.35);
+          gain.gain.setValueAtTime(0.22, now);
+          gain.gain.setValueAtTime(0.22, now + 0.28);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.4);
+
+        } else if (reactionId === 'zoomies') {
+          // Rapid ascending burst: sine sweep 300→1400Hz over 300ms
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(300, now);
+          osc.frequency.linearRampToValueAtTime(1400, now + 0.3);
+          gain.gain.setValueAtTime(0, now);
+          gain.gain.linearRampToValueAtTime(0.3, now + 0.02);
+          gain.gain.setValueAtTime(0.3, now + 0.25);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + 0.32);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + 0.35);
+        }
+      });
+    }
+
+    // ─── selectReaction ──────────────────────────────────────────
+    // Randomly selects a reaction from REACTIONS using uniform distribution.
+    // When pool has more than 1 reaction, guarantees the selected index
+    // differs from state.lastReactionIndex to prevent consecutive repeats.
+    // Updates state.lastReactionIndex and returns the chosen reaction object.
+    function selectReaction() {
+      let idx;
+      do {
+        idx = Math.floor(Math.random() * REACTIONS.length);
+      } while (REACTIONS.length > 1 && idx === state.lastReactionIndex);
+      state.lastReactionIndex = idx;
+      return REACTIONS[idx];
+    }
+
+    // ─── applyState ──────────────────────────────────────────────
+    // Req 5.5: sad state when happiness === 0
+    // Req 5.6: meter fill reflects happiness proportionally (0%–100%)
+    // Req 5.7: CSS transition on fill (≤ 300ms, defined in stylesheet)
+    function applyState() {
+      const catEl = document.getElementById('cat');
+      const fillEl = document.getElementById('happiness-fill');
+      const meterEl = document.getElementById('happiness-bar');
+
+      // Update pet counter text
+      document.getElementById('pet-counter').textContent = state.petCount;
+
+      // Update happiness fill width
+      fillEl.style.width = state.happiness + '%';
+
+      // Update ARIA attribute on progress bar
+      meterEl.setAttribute('aria-valuenow', state.happiness);
+
+      // Toggle sad state when happiness === 0
+      catEl.classList.toggle('cat--sad', state.happiness === 0);
+
+      // Toggle max happiness state when happiness === 100
+      catEl.classList.toggle('cat--max', state.happiness === 100);
+      meterEl.classList.toggle('meter--max', state.happiness === 100);
+    }
+
+    // ─── Counter ─────────────────────────────────────────────────
+    function updateCounter() {
+      state.petCount += 1;
+      document.getElementById('pet-counter').textContent = state.petCount;
+    }
+
+    // ─── handlePet ───────────────────────────────────────────────
+    // Req 2.1: registers a pet on click or tap within cat's bounding area
+    // Req 2.2: immediately plays a reaction after pet is registered
+    // Req 2.3: queues pets during animation (no input drop)
+    // Req 2.4: supports mouse click and touch tap
+    // Req 2.5: prevents default browser touch behaviour (zoom, scroll)
+    function handlePet(event) {
+      event.preventDefault();
+
+      if (state.isAnimating) {
+        // Queue the pet — will be processed after current animation ends
+        state.pendingPets += 1;
+        return;
+      }
+
+      updateCounter();
+      increaseHappiness();
+      const reaction = selectReaction();
+      playReaction(reaction);
+      applyState();
+    }
+
+    // ─── playReaction ────────────────────────────────────────────
+    // Req 3.3: plays animation for animDuration ms
+    // Req 3.4: shows speech bubble for bubbleDuration ms
+    // Req 3.6: speech bubble fades in ≤ 200ms, fades out ≤ 300ms (via CSS)
+    // Req 5.4: handles max-happiness visual state
+    // Req 5.5: reflects sad/max cat state during/after animation
+    // Req 6.1: uses CSS keyframe animations
+    // Req 6.2: smooth transitions
+    // Req 6.4: smooth state transitions on cat
+    function playReaction(reaction) {
+      const catEl    = document.getElementById('cat');
+      const bubbleEl = document.getElementById('speech-bubble');
+
+      // Mark animation in flight
+      state.isAnimating = true;
+
+      // Play synthesized sound for this reaction
+      try {
+        playSound(reaction.sound);
+      } catch (e) {
+        // Audio errors must never break the visual experience
+      }
+
+      // --- Apply animation class to cat ---
+      catEl.classList.add(reaction.animClass);
+
+      // --- Show speech bubble ---
+      // Remove hiding class in case a previous fade-out was still in progress
+      bubbleEl.classList.remove('speech-bubble--hiding');
+      bubbleEl.textContent = reaction.emoji;
+      bubbleEl.classList.add('speech-bubble--visible');
+
+      // --- Remove animation class after animDuration ---
+      setTimeout(function () {
+        catEl.classList.remove(reaction.animClass);
+      }, reaction.animDuration);
+
+      // --- Hide speech bubble after bubbleDuration ---
+      setTimeout(function () {
+        // Trigger fade-out via CSS transition class (≤ 300ms per Req 3.6)
+        bubbleEl.classList.remove('speech-bubble--visible');
+        bubbleEl.classList.add('speech-bubble--hiding');
+
+        // Clean up after the 300ms fade-out transition completes
+        setTimeout(function () {
+          bubbleEl.classList.remove('speech-bubble--hiding');
+          bubbleEl.textContent = '';
+        }, 300);
+
+        // Animation sequence is done — clear flag and process any queued pets
+        state.isAnimating = false;
+        applyState();
+
+        if (state.pendingPets > 0) {
+          state.pendingPets -= 1;
+          updateCounter();
+          increaseHappiness();
+          const nextReaction = selectReaction();
+          applyState();
+          playReaction(nextReaction);
+        }
+      }, reaction.bubbleDuration);
+    }
+
+    // ─── Event Wiring ────────────────────────────────────────────
+    // Req 2.1, 2.4: register click and touchend on the cat element
+    // Req 2.5: suppress default touch behaviour (scroll/zoom) on touchstart
+    document.addEventListener('DOMContentLoaded', function () {
+      const catEl = document.getElementById('cat');
+
+      // Mouse click
+      catEl.addEventListener('click', handlePet);
+
+      // Touch tap — touchend fires when finger lifts; preventDefault stops
+      // the 300ms delay click ghost event and any scroll/zoom
+      catEl.addEventListener('touchend', handlePet);
+
+      // Suppress scroll/zoom on touchstart (Req 2.5)
+      catEl.addEventListener('touchstart', function (e) {
+        e.preventDefault();
+      }, { passive: false });
+
+      // Req 5.3: decay happiness by 1 every 500ms when idle > 3s and happiness > 0
+      // decayTick() contains the guard; applyState() syncs DOM after each tick
+      setInterval(function () {
+        decayTick();
+        applyState();
+      }, 500);
+    });
+  </script>
+</body>
+</html>
